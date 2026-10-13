@@ -179,7 +179,7 @@ def review_card(card_id, quality):
     conn.commit()
     conn.close()
 
-def get_due_cards(limit=15):
+def get_due_cards(limit=20):
     today = datetime.date.today().isoformat()
     conn = get_connection()
     c = conn.cursor()
@@ -225,7 +225,7 @@ OFFICIAL_HSK4_VOCAB = [
     ("不管", "bùguǎn", "No matter / Regardless of", "不管天气怎样，我都要去。", "Bùguǎn tiānqì zěnyàng, wǒ dōu yào qù.", "No matter the weather, I will go."),
     ("不仅", "bùjǐn", "Not only", "他不仅聪明，而且很努力。", "Tā bùjǐn cōngmíng, érqiě hěn nǔlì.", "He is not only smart, but also hardworking."),
     ("擦", "cā", "To wipe / Rub / Clean", "请把桌子擦干净。", "Qǐng bǎ zhuōzi cā gānjìng.", "Please wipe the table clean."),
-    ("猜", "cāi", "To guess", "你能猜出来他是谁吗？", "Nǐ néng cāi chūlái tā shì shéi ma？", "Can you guess who he is?"),
+    ("猜", "cāi", "To guess", "你能猜出来他是谁吗？", "Nǐ néng cāi chūlái tā shì shéi ma?", "Can you guess who he is?"),
     ("材料", "cáiliào", "Material / Document", "准备好开会的材料了吗？", "Zhǔnbèi hǎo kāihuì de cáiliào le ma?", "Are the meeting materials ready?"),
     ("差不多", "chàbuduō", "Almost / About the same", "两个人的答案差不多。", "Liǎng gè rén de dá'àn chàbuduō.", "The two answers are almost the same."),
     ("成功", "chénggōng", "Success / To succeed", "经过努力，他成功了。", "Jīngguò nǔlì, tā chénggōng le.", "Through effort, he succeeded."),
@@ -299,9 +299,14 @@ st.markdown("""
     .main-title { font-size: 2.2rem; font-weight: 800; background: linear-gradient(90deg, #FF4B4B, #FF8533, #FFC300); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     .stat-card { background-color: #1E222A; border-radius: 12px; padding: 12px; text-align: center; border: 1px solid #333948; }
     .stat-val { font-size: 1.5rem; font-weight: bold; color: #FFC300; }
-    .flashcard { background: linear-gradient(135deg, #2A2F3D, #1F232D); border: 2px solid #FF8533; border-radius: 16px; padding: 35px; text-align: center; }
-    .hanzi-display { font-size: 4rem; font-weight: bold; color: #FFF; margin-bottom: 10px; }
-    .pinyin-display { font-size: 1.8rem; color: #FF8533; font-weight: 600; }
+    .flashcard-anki { background: linear-gradient(135deg, #2A2F3D, #1F232D); border: 2px solid #FF8533; border-radius: 16px; padding: 35px; text-align: center; position: relative; }
+    .anki-card-label { position: absolute; top: 12px; left: 16px; font-size: 0.75rem; font-weight: bold; letter-spacing: 1px; color: #FF8533; text-transform: uppercase; }
+    .hanzi-display { font-size: 4.5rem; font-weight: bold; color: #FFF; margin: 15px 0; }
+    .pinyin-display { font-size: 1.8rem; color: #FF8533; font-weight: 600; margin-bottom: 8px; }
+    .english-display { font-size: 1.4rem; font-weight: bold; color: #FFC300; margin-bottom: 15px; }
+    .example-box { background-color: #14171F; border-radius: 10px; padding: 16px; margin-top: 15px; text-align: left; border: 1px solid #333948; }
+    .note-box { background-color: #1A202C; border-radius: 8px; padding: 10px; margin-top: 12px; font-size: 0.95rem; color: #CBD5E0; text-align: left; border-left: 4px solid #FFC300; }
+    .anki-hint { font-size: 0.95rem; color: #A0AEC0; margin-top: 15px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -321,79 +326,106 @@ with m4: st.markdown(f'''<div class="stat-card"><div class="stat-val">🎴 {deck
 
 st.write("---")
 
-tab1, tab2, tab3, tab4 = st.tabs(["🎴 SRS Flashcards", "🧩 Grammar Builder", "📝 Daily Word Capture", "⚡ Speed Quiz"])
+tab1, tab2, tab3, tab4 = st.tabs(["🎴 SRS Flashcards (Anki Style)", "🧩 Grammar Builder", "📝 Daily Word Capture", "⚡ Speed Quiz"])
 
-# --- TAB 1: SRS FLASHCARDS ---
+# --- TAB 1: SRS FLASHCARDS (ANKI STYLE) ---
 with tab1:
-    due_cards = get_due_cards(limit=10)
-    if not due_cards:
-        st.success("🎉 All due cards reviewed! Great job!")
+    # Initialize card queue in session state so it doesn't shuffle during card reveals
+    if "card_queue" not in st.session_state or not st.session_state.card_queue:
+        st.session_state.card_queue = get_due_cards(limit=20)
+        st.session_state.current_card_index = 0
+        st.session_state.show_ans = False
+
+    if not st.session_state.card_queue:
+        st.success("🎉 No due cards right now! Excellent job!")
+        if st.button("🔄 Reload All Cards for Practice"):
+            conn = get_connection()
+            c = conn.cursor()
+            c.execute("SELECT id, word_hanzi, pinyin, english, sample_zh, sample_pinyin, sample_en, category, context_note FROM vocab_deck ORDER BY RANDOM() LIMIT 20")
+            st.session_state.card_queue = c.fetchall()
+            conn.close()
+            st.session_state.current_card_index = 0
+            st.session_state.show_ans = False
+            st.rerun()
     else:
-        if "s_idx" not in st.session_state: st.session_state.s_idx = 0
-        if "show_ans" not in st.session_state: st.session_state.show_ans = False
-        
-        card = due_cards[st.session_state.s_idx % len(due_cards)]
+        # Get active card from persistent queue
+        idx = st.session_state.current_card_index % len(st.session_state.card_queue)
+        card = st.session_state.card_queue[idx]
         cid, hz, py, en, szh, spy, sen, cat, note = card
-        
+
+        st.caption(f"🎴 **Card {idx+1} of {len(st.session_state.card_queue)}** • Category: `{cat}`")
+
+        # ANKI FLASHCARD COMPONENT
         if not st.session_state.show_ans:
-            # HIDDEN STATE: Show ONLY the Hanzi character
+            # === ANKI FRONT SIDE ===
             st.markdown(f'''
-            <div class="flashcard">
+            <div class="flashcard-anki">
+                <div class="anki-card-label">FRONT (QUESTION)</div>
                 <div class="hanzi-display">{hz}</div>
-                <div style="font-size:0.95rem; color:#A0AEC0; margin-top:15px;">[ Character Only — Press REVEAL ANSWER to check Pinyin & Meaning ]</div>
+                <div class="anki-hint">Read the character above, then press <b>REVEAL ANSWER</b></div>
             </div>
             ''', unsafe_allow_html=True)
             
             st.write("")
-            if st.button("👀 REVEAL ANSWER", use_container_width=True):
+            if st.button("👀 REVEAL ANSWER", use_container_width=True, type="primary"):
                 st.session_state.show_ans = True
                 st.rerun()
         else:
-            # REVEALED STATE: Show Hanzi + Pinyin + Meaning + Examples + Notes
+            # === ANKI BACK SIDE ===
             st.markdown(f'''
-            <div class="flashcard">
+            <div class="flashcard-anki">
+                <div class="anki-card-label">BACK (ANSWER REVEALED)</div>
                 <div class="hanzi-display">{hz}</div>
-                <div class="pinyin-display" style="margin-top:10px;">🗣️ {py}</div>
-                <div style="font-size:1.4rem; font-weight:bold; color:#FFC300; margin-top:15px;">💡 {en}</div>
+                <hr style="border:0; border-top: 2px dashed #FF8533; margin: 20px 0;"/>
+                <div class="pinyin-display">🗣️ {py}</div>
+                <div class="english-display">💡 {en}</div>
             ''', unsafe_allow_html=True)
             
             if szh:
                 st.markdown(f'''
-                <div style="background-color:#14171F; border-radius:8px; padding:14px; margin-top:15px; text-align:left; border:1px solid #333948;">
+                <div class="example-box">
                     <div style="font-size:1.1rem; color:#FFF;"><b>例句:</b> {szh}</div>
                     <div style="font-size:0.95rem; color:#FF8533; margin-top:4px;"><b>拼音:</b> {spy}</div>
-                    <div style="font-size:0.95rem; color:#A0AEC0; margin-top:4px;"><b>翻译:</b> {sen}</div>
+                    <div style="font-size:0.95rem; color:#CBD5E0; margin-top:4px;"><b>翻译:</b> {sen}</div>
                 </div>
                 ''', unsafe_allow_html=True)
+                
             if note:
-                st.markdown(f'<div style="font-size:0.95rem; color:#CBD5E0; margin-top:12px; text-align:left;">📝 <b>Context Note:</b> {note}</div>', unsafe_allow_html=True)
+                st.markdown(f'''
+                <div class="note-box">
+                    📝 <b>Context Note:</b> {note}
+                </div>
+                ''', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
             
             st.write("")
+            st.caption("How well did you know this card?")
+            
+            # ANKI GRADE BUTTONS WITH INTERVAL PREDICTIONS
             r1, r2, r3, r4 = st.columns(4)
             with r1:
-                if st.button("🔴 Again", use_container_width=True):
+                if st.button("🔴 Again\n(<1 min)", use_container_width=True):
                     review_card(cid, 0)
                     st.session_state.show_ans = False
-                    st.session_state.s_idx += 1
+                    st.session_state.current_card_index += 1
                     st.rerun()
             with r2:
-                if st.button("🟠 Hard", use_container_width=True):
+                if st.button("🟠 Hard\n(1 day)", use_container_width=True):
                     review_card(cid, 1); add_xp(5)
                     st.session_state.show_ans = False
-                    st.session_state.s_idx += 1
+                    st.session_state.current_card_index += 1
                     st.rerun()
             with r3:
-                if st.button("🟢 Good", use_container_width=True):
+                if st.button("🟢 Good\n(3 days)", use_container_width=True):
                     review_card(cid, 2); add_xp(10)
                     st.session_state.show_ans = False
-                    st.session_state.s_idx += 1
+                    st.session_state.current_card_index += 1
                     st.rerun()
             with r4:
-                if st.button("🌟 Easy", use_container_width=True):
+                if st.button("🌟 Easy\n(7 days)", use_container_width=True):
                     review_card(cid, 3); add_xp(15)
                     st.session_state.show_ans = False
-                    st.session_state.s_idx += 1
+                    st.session_state.current_card_index += 1
                     st.rerun()
 
 # --- TAB 2: GRAMMAR BUILDER ---
@@ -449,6 +481,8 @@ with tab3:
                 c.execute("INSERT INTO vocab_deck (word_hanzi, pinyin, english, category, context_note, next_review_date) VALUES (?, ?, ?, 'Daily Conversation', ?, ?)", (f_hz, f_py, f_en, f_note, today))
                 conn.commit(); conn.close()
                 add_xp(15)
+                # Invalidate card queue so new word appears in review queue immediately
+                if "card_queue" in st.session_state: del st.session_state.card_queue
                 st.success(f"Saved '{f_hz}' to SRS deck!")
                 st.rerun()
 
