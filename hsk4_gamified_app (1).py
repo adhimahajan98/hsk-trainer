@@ -225,7 +225,7 @@ OFFICIAL_HSK4_VOCAB = [
     ("不管", "bùguǎn", "No matter / Regardless of", "不管天气怎样，我都要去。", "Bùguǎn tiānqì zěnyàng, wǒ dōu yào qù.", "No matter the weather, I will go."),
     ("不仅", "bùjǐn", "Not only", "他不仅聪明，而且很努力。", "Tā bùjǐn cōngmíng, érqiě hěn nǔlì.", "He is not only smart, but also hardworking."),
     ("擦", "cā", "To wipe / Rub / Clean", "请把桌子擦干净。", "Qǐng bǎ zhuōzi cā gānjìng.", "Please wipe the table clean."),
-    ("猜", "cāi", "To guess", "你能猜出来他是谁吗？", "Nǐ néng cāi chūlái tā shì shéi ma?", "Can you guess who he is?"),
+    ("猜", "cāi", "To guess", "你能猜出来他是谁吗？", "Nǐ néng cāi chūlái tā shì shéi ma？", "Can you guess who he is?"),
     ("材料", "cáiliào", "Material / Document", "准备好开会的材料了吗？", "Zhǔnbèi hǎo kāihuì de cáiliào le ma?", "Are the meeting materials ready?"),
     ("差不多", "chàbuduō", "Almost / About the same", "两个人的答案差不多。", "Liǎng gè rén de dá'àn chàbuduō.", "The two answers are almost the same."),
     ("成功", "chénggōng", "Success / To succeed", "经过努力，他成功了。", "Jīngguò nǔlì, tā chénggōng le.", "Through effort, he succeeded."),
@@ -299,9 +299,9 @@ st.markdown("""
     .main-title { font-size: 2.2rem; font-weight: 800; background: linear-gradient(90deg, #FF4B4B, #FF8533, #FFC300); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
     .stat-card { background-color: #1E222A; border-radius: 12px; padding: 12px; text-align: center; border: 1px solid #333948; }
     .stat-val { font-size: 1.5rem; font-weight: bold; color: #FFC300; }
-    .flashcard { background: linear-gradient(135deg, #2A2F3D, #1F232D); border: 2px solid #FF8533; border-radius: 16px; padding: 30px; text-align: center; }
-    .hanzi-display { font-size: 3.5rem; font-weight: bold; color: #FFF; }
-    .pinyin-display { font-size: 1.5rem; color: #FF8533; }
+    .flashcard { background: linear-gradient(135deg, #2A2F3D, #1F232D); border: 2px solid #FF8533; border-radius: 16px; padding: 35px; text-align: center; }
+    .hanzi-display { font-size: 4rem; font-weight: bold; color: #FFF; margin-bottom: 10px; }
+    .pinyin-display { font-size: 1.8rem; color: #FF8533; font-weight: 600; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -335,22 +335,41 @@ with tab1:
         card = due_cards[st.session_state.s_idx % len(due_cards)]
         cid, hz, py, en, szh, spy, sen, cat, note = card
         
-        st.markdown(f'''
-        <div class="flashcard">
-            <div class="hanzi-display">{hz}</div>
-            <div class="pinyin-display">{py}</div>
-        ''', unsafe_allow_html=True)
-        
-        if st.session_state.show_ans:
-            st.markdown(f"<div style='font-size:1.3rem; margin-top:15px;'>💡 {en}</div>", unsafe_allow_html=True)
-            if szh: st.info(f"Example: {szh} ({spy}) - '{sen}'")
-        st.markdown('</div>', unsafe_allow_html=True)
-        
         if not st.session_state.show_ans:
-            if st.button("👀 Reveal Answer", use_container_width=True):
+            # HIDDEN STATE: Show ONLY the Hanzi character
+            st.markdown(f'''
+            <div class="flashcard">
+                <div class="hanzi-display">{hz}</div>
+                <div style="font-size:0.95rem; color:#A0AEC0; margin-top:15px;">[ Character Only — Press REVEAL ANSWER to check Pinyin & Meaning ]</div>
+            </div>
+            ''', unsafe_allow_html=True)
+            
+            st.write("")
+            if st.button("👀 REVEAL ANSWER", use_container_width=True):
                 st.session_state.show_ans = True
                 st.rerun()
         else:
+            # REVEALED STATE: Show Hanzi + Pinyin + Meaning + Examples + Notes
+            st.markdown(f'''
+            <div class="flashcard">
+                <div class="hanzi-display">{hz}</div>
+                <div class="pinyin-display" style="margin-top:10px;">🗣️ {py}</div>
+                <div style="font-size:1.4rem; font-weight:bold; color:#FFC300; margin-top:15px;">💡 {en}</div>
+            ''', unsafe_allow_html=True)
+            
+            if szh:
+                st.markdown(f'''
+                <div style="background-color:#14171F; border-radius:8px; padding:14px; margin-top:15px; text-align:left; border:1px solid #333948;">
+                    <div style="font-size:1.1rem; color:#FFF;"><b>例句:</b> {szh}</div>
+                    <div style="font-size:0.95rem; color:#FF8533; margin-top:4px;"><b>拼音:</b> {spy}</div>
+                    <div style="font-size:0.95rem; color:#A0AEC0; margin-top:4px;"><b>翻译:</b> {sen}</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            if note:
+                st.markdown(f'<div style="font-size:0.95rem; color:#CBD5E0; margin-top:12px; text-align:left;">📝 <b>Context Note:</b> {note}</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            st.write("")
             r1, r2, r3, r4 = st.columns(4)
             with r1:
                 if st.button("🔴 Again", use_container_width=True):
